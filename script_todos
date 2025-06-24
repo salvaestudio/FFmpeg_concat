@@ -1,0 +1,56 @@
+@echo off setlocal enabledelayedexpansion
+
+@echo off
+setlocal enabledelayedexpansion
+
+:: Carpeta de entrada y temporales
+set "carpeta=toFFmpeg"
+set "temp=intermedios"
+set "filelist=lista.txt"
+set "output=salida.mp4"
+set "clip_negro=00_black2s.mov"
+
+:: Preparar carpeta temporal
+if exist "%temp%" rd /s /q "%temp%"
+mkdir "%temp%"
+
+echo.
+echo Recodificando vídeos de la carpeta %carpeta%...
+setlocal EnableDelayedExpansion
+set i=0
+
+:: Obtener lista ordenada de archivos (excepto el negro) y convertirlos uno a uno
+for /f "delims=" %%f in ('dir /b /on "%carpeta%\*.mov" "%carpeta%\*.mp4"') do (
+    if /I not "%%f"=="%clip_negro%" (
+        set /a i+=1
+        set "num=00!i!"
+        set "num=!num:~-3!"
+        ffmpeg -y -i "%carpeta%\%%f" -c:v libx264 -crf 20 -preset fast -c:a aac -b:a 128k "%temp%\clip_!num!.mp4"
+    )
+)
+
+:: Recodificar clip negro una sola vez
+ffmpeg -y -i "%carpeta%\%clip_negro%" -c:v libx264 -crf 20 -preset fast -c:a aac -b:a 128k "%temp%\negro.mp4"
+
+:: Crear lista.txt intercalando negro antes, entre y después
+del "%temp%\%filelist%" 2>nul
+pushd "%temp%"
+echo file 'negro.mp4' >> "%filelist%"
+
+for /f "delims=" %%f in ('dir /b /on clip_*.mp4') do (
+    echo file '%%f' >> "%filelist%"
+    echo file 'negro.mp4' >> "%filelist%"
+)
+popd
+
+:: Concatenar todos los clips y negros de forma segura
+echo.
+echo Generando archivo final...
+ffmpeg -f concat -safe 0 -i "%temp%\%filelist%" -c:v libx264 -crf 28 -preset slow -c:a aac -b:a 128k "%output%"
+
+:: Limpiar
+rd /s /q "%temp%"
+
+echo.
+echo ¡Hecho! Archivo generado: %output%
+pause
