@@ -1,0 +1,32 @@
+@echo off
+setlocal enabledelayedexpansion
+
+:: Configuración
+set "INPUT_DIR=toFFmpeg"
+set "BLACK=toFFmpeg\00_black2s.mp4"
+set "LIST_FILE=concat_list.txt"
+set "OUTPUT_FILE=output_reel.mp4"
+
+:: Limpiar archivo anterior
+if exist %LIST_FILE% del %LIST_FILE%
+
+:: Añadir negro inicial
+echo file '%BLACK%' >> %LIST_FILE%
+
+:: Recorrer todos los archivos ordenados
+for %%F in (%INPUT_DIR%\*) do (
+    if /I not "%%~nxF"=="00_black2s.mp4" (
+        echo file '%%F' >> %LIST_FILE%
+        echo file '%BLACK%' >> %LIST_FILE%
+    )
+)
+
+:: Generar salida comprimida
+ffmpeg -f concat -safe 0 -i %LIST_FILE% -c:v libx264 -crf 28 -preset slow -c:a aac -b:a 192k -movflags +faststart %OUTPUT_FILE%
+
+:: Limpiar
+del %LIST_FILE%
+
+echo.
+echo ✅ Proceso completado. Archivo generado: %OUTPUT_FILE%
+pause
