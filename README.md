@@ -21,10 +21,11 @@ Modo de uso:
 
 La estructura de carpeta del script es:
 
-📁 Carpeta script
 
+
+````
+📁 Carpeta script
     . concat_ffmpeg_todo.bat  ← el script está aquí
-    
     .📁 toFFmpeg
     
         .00_black2s.mov
@@ -34,5 +35,8 @@ La estructura de carpeta del script es:
         .02_video1.mp4
         
         ...
+
+````
+
         
 
