@@ -1,56 +1,98 @@
-@echo off setlocal enabledelayedexpansion
-
 @echo off
 setlocal enabledelayedexpansion
 
-:: Carpeta de entrada y temporales
+:: Carpetas y archivos
 set "carpeta=toFFmpeg"
 set "temp=intermedios"
 set "filelist=lista.txt"
 set "output=salida.mp4"
 set "clip_negro=00_black2s.mov"
 
-:: Preparar carpeta temporal
+:: Crear carpeta temporal
 if exist "%temp%" rd /s /q "%temp%"
 mkdir "%temp%"
 
 echo.
 echo Recodificando vídeos de la carpeta %carpeta%...
-setlocal EnableDelayedExpansion
 set i=0
 
-:: Obtener lista ordenada de archivos (excepto el negro) y convertirlos uno a uno
+:: LOOP de vídeos (excepto el negro)
 for /f "delims=" %%f in ('dir /b /on "%carpeta%\*.mov" "%carpeta%\*.mp4"') do (
     if /I not "%%f"=="%clip_negro%" (
         set /a i+=1
         set "num=00!i!"
         set "num=!num:~-3!"
-        ffmpeg -y -i "%carpeta%\%%f" -c:v libx264 -crf 20 -preset fast -c:a aac -b:a 128k "%temp%\clip_!num!.mp4"
+        set "infile=%carpeta%\%%f"
+        set "outfile=%temp%\clip_!num!.mp4"
+        set "hasAudio="
+
+        call :hasAudioCheck "!infile!" hasAudio
+
+        if defined hasAudio (
+            echo [%%f] tiene audio, recodificando con audio original...
+            ffmpeg -y -i "!infile!" ^
+            -filter_complex "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1[v]" ^
+            -map "[v]" -map 0:a -c:v libx264 -crf 20 -preset fast -c:a aac -b:a 128k -shortest "!outfile!"
+        ) else (
+            echo [%%f] NO tiene audio, añadiendo audio silencioso...
+            ffmpeg -y -i "!infile!" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 ^
+            -filter_complex "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1[v]" ^
+            -map "[v]" -map 1:a -c:v libx264 -crf 20 -preset fast -c:a aac -b:a 128k -shortest "!outfile!"
+        )
     )
 )
 
-:: Recodificar clip negro una sola vez
-ffmpeg -y -i "%carpeta%\%clip_negro%" -c:v libx264 -crf 20 -preset fast -c:a aac -b:a 128k "%temp%\negro.mp4"
+:: Clip negro
+echo.
+echo Recodificando clip negro...
+set "negroin=%carpeta%\%clip_negro%"
+set "negroout=%temp%\negro.mp4"
+set "hasAudio="
 
-:: Crear lista.txt intercalando negro antes, entre y después
+call :hasAudioCheck "!negroin!" hasAudio
+
+if defined hasAudio (
+    ffmpeg -y -i "!negroin!" ^
+    -filter_complex "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1[v]" ^
+    -map "[v]" -map 0:a -c:v libx264 -crf 20 -preset fast -c:a aac -b:a 128k -shortest "!negroout!"
+) else (
+    ffmpeg -y -i "!negroin!" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 ^
+    -filter_complex "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1[v]" ^
+    -map "[v]" -map 1:a -c:v libx264 -crf 20 -preset fast -c:a aac -b:a 128k -shortest "!negroout!"
+)
+
+:: Generar lista.txt
+echo.
+echo Generando lista para concatenar...
 del "%temp%\%filelist%" 2>nul
 pushd "%temp%"
 echo file 'negro.mp4' >> "%filelist%"
 
-for /f "delims=" %%f in ('dir /b /on clip_*.mp4') do (
-    echo file '%%f' >> "%filelist%"
-    echo file 'negro.mp4' >> "%filelist%"
+for %%f in (clip_*.mp4) do (
+    if exist "%%f" (
+        echo file '%%f' >> "%filelist%"
+        echo file 'negro.mp4' >> "%filelist%"
+    )
 )
 popd
 
-:: Concatenar todos los clips y negros de forma segura
+:: Concatenar resultado final
 echo.
-echo Generando archivo final...
+echo Concatenando resultado final...
 ffmpeg -f concat -safe 0 -i "%temp%\%filelist%" -c:v libx264 -crf 28 -preset slow -c:a aac -b:a 128k "%output%"
-
-:: Limpiar
-rd /s /q "%temp%"
 
 echo.
 echo ¡Hecho! Archivo generado: %output%
+
+:: Limpiar carpeta temporal
+rd /s /q "%temp%"
 pause
+exit /b
+
+:: ---------- FUNCION PARA DETECTAR AUDIO ----------
+:hasAudioCheck
+set "%2="
+for /f %%A in ('ffprobe -v error -select_streams a -show_entries stream^=codec_type -of csv^=p^=0 %1') do (
+    set "%2=1"
+)
+exit /b
