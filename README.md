@@ -35,5 +35,8 @@ La estructura de carpeta del script es:
 
 ````
 
-        
+script_mov y script_mp4 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>  
+
+Lo mismo pero preparados SOLO para codificar en HD y SOLO .mov prores o SOLO .mp4
+Por tanto en la carpeta "toFFmpeg" solo puede haber archivos del mismo tamaño, HD y solo .mov o solo .mp4 dependiendo del script que se use. 
 
